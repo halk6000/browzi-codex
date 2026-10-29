@@ -53,4 +53,38 @@ server.tool("network_errors", "Return recent failed requests and browser errors"
 server.tool("close_browser", "Close isolated browser", {}, async () => {
   await browser?.close(); browser = undefined; context = undefined; page = undefined; return output({ closed: true });
 });
+
+server.tool("probe_http", "Directly inspect HTTP response without browser JavaScript; useful for diagnosing health endpoints and redirects", {
+  url: z.string().url(),
+  timeoutMs: z.number().int().min(1000).max(30000).default(12000)
+}, async ({ url, timeoutMs }) => {
+  if (!/^https?:$/.test(new URL(url).protocol)) throw new Error("Only HTTP(S) URLs supported");
+  const started = Date.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      redirect: "manual",
+      signal: controller.signal,
+      headers: { accept: "application/json, text/html;q=0.9" }
+    });
+    const body = await response.text();
+    return output({
+      requestedUrl: new URL(url).origin + new URL(url).pathname,
+      status: response.status,
+      durationMs: Date.now() - started,
+      contentType: response.headers.get("content-type"),
+      redirectLocation: response.headers.get("location"),
+      bodyPreview: body.slice(0, 1200),
+      bodyLength: body.length
+    });
+  } catch (error) {
+    return output({
+      requestedUrl: new URL(url).origin + new URL(url).pathname,
+      durationMs: Date.now() - started,
+      error: error.name + ": " + error.message
+    });
+  } finally { clearTimeout(timer); }
+});
+
 await server.connect(new StdioServerTransport());
