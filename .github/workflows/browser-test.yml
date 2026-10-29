@@ -15,6 +15,9 @@ jobs:
           node-version: '22'
       - run: npm install --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
+      - name: Probe HTTP without browser JavaScript
+        if: always()
+        run: node scripts/http-probe.mjs
       - name: Run mobile browser diagnostic
         run: node scripts/smoke.mjs
       - uses: actions/upload-artifact@v4
